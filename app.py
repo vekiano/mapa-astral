@@ -113,11 +113,14 @@ def dt_to_jd_utc(dt_utc):
 
 
 def jd_para_datetime(jd, tz_offset=0.0):
-    year, month, day, hour = swe.revjul(jd + tz_offset / 24.0)
+    year, month, day, hour = swe.revjul(jd, 1)  # 1 = calendário gregoriano
     hour_int = int(hour)
     minute = int((hour - hour_int) * 60)
     second = int(((hour - hour_int) * 60 - minute) * 60)
-    return datetime(year, month, day, hour_int, minute, second)
+    dt_utc = datetime(year, month, day, hour_int, minute, second)
+    # Adiciona o timezone para converter UTC -> Local
+    dt_local = dt_utc + timedelta(hours=tz_offset)
+    return dt_local
 
 
 def dias_para_hms(dias: float) -> str:
@@ -604,6 +607,9 @@ class MapaAstral:
         rel.append("=" * 100)
         rel.append(
             f"Data: {self.dia:02d}/{self.mes:02d}/{self.ano}  Hora: {self.hora:02d}:{self.minuto:02d}:{self.segundo:02d} (UTC {self.timezone_horas:+.1f}h)")
+        rel.append(f"Hora Local: {self.dt_local.strftime('%d/%m/%Y %H:%M:%S')}")
+        rel.append(f"Hora UTC:   {self.dt_utc.strftime('%d/%m/%Y %H:%M:%S')}")
+        rel.append(f"Julian Day: {self.jd:.8f}")
         if self.cidade or self.estado or self.pais:
             rel.append(f"Local: {self.cidade} / {self.estado} / {self.pais}")
         rel.append(f"Lat: {self.latitude:.6f}  Lon: {self.longitude:.6f}")
@@ -742,12 +748,26 @@ button:hover{transform:translateY(-2px)}
 .resultado{margin-top:20px;padding:15px;background:#f0f9ff;border-radius:8px;display:none;max-height:500px;overflow-y:auto}
 .resultado pre{font-family:monospace;font-size:10px;color:#1e3a8a}
 .loading{display:none;text-align:center;color:#667eea;font-weight:bold;font-size:12px}
-#modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center}
-#modal>div{background:white;padding:20px;border-radius:8px;width:90%;max-width:400px}
-#cidades-list{max-height:200px;overflow-y:auto;border:1px solid #ddd;border-radius:4px}
-.cidade-item{padding:8px;border-bottom:1px solid #eee;cursor:pointer;font-size:11px}
+#modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;padding:10px}
+#modal>div{background:white;padding:15px;border-radius:8px;width:100%;max-width:500px;max-height:90vh;display:flex;flex-direction:column}
+#modal h3{font-size:16px;margin-bottom:10px;flex-shrink:0}
+#modal input[type="text"]{width:100%;padding:12px;margin:0 0 10px 0;border:1px solid #ddd;border-radius:4px;font-size:14px;flex-shrink:0}
+#cidades-list{flex:1;overflow-y:auto;border:1px solid #ddd;border-radius:4px;min-height:150px;max-height:40vh}
+.cidade-item{padding:12px 8px;border-bottom:1px solid #eee;cursor:pointer;font-size:13px}
 .cidade-item:hover{background:#f0f9ff}
+#modal button{margin-top:10px;padding:10px;flex-shrink:0}
 .btn-copy{margin-top:10px;width:auto;display:inline-block;padding:6px 12px;font-size:11px}
+@media (max-width: 640px) {
+  .container{padding:15px;border-radius:8px}
+  h1{font-size:20px}
+  #modal>div{padding:12px;max-height:85vh}
+  #modal h3{font-size:14px}
+  #modal input[type="text"]{font-size:16px;padding:10px}
+  .cidade-item{padding:14px 10px;font-size:14px}
+  input,select{font-size:14px;padding:8px}
+  button{padding:10px;font-size:14px}
+  .btn-copy{font-size:13px;padding:8px 14px}
+}
 </style>
 </head>
 <body>
@@ -818,7 +838,7 @@ button:hover{transform:translateY(-2px)}
 <h3 style="font-size:14px;margin-bottom:10px">Buscar Cidade</h3>
 <input type="text" id="search" placeholder="Digite a cidade..." style="width:100%;padding:8px;margin:10px 0;border:1px solid #ddd;border-radius:4px;font-size:12px">
 <div id="cidades-list"></div>
-<button onclick="document.getElementById('modal').style.display='none'" style="margin-top:10px;padding:6px">Fechar</button>
+<button onclick="fecharModal()" style="margin-top:10px;padding:6px">Fechar</button>
 </div></div>
 
 <script>
@@ -838,7 +858,15 @@ function abrirBusca() {
   let cidadeAtual = document.getElementById('cidade').value;
   document.getElementById('search').value = cidadeAtual;
   document.getElementById('modal').style.display = 'flex';
-  document.getElementById('search').focus();
+  document.body.style.overflow = 'hidden';
+  setTimeout(function() {
+    document.getElementById('search').focus();
+  }, 100);
+}
+
+function fecharModal() {
+  document.getElementById('modal').style.display = 'none';
+  document.body.style.overflow = 'auto';
 }
 
 function atualizarHoraParaTimeZone() {
@@ -891,7 +919,7 @@ document.getElementById('search').addEventListener('input', async function(e) {
       document.getElementById('lonh').value = (d.lon < 0 ? 'W' : 'E');
       document.getElementById('tz').value = d.tz;
       atualizarHoraParaTimeZone();
-      document.getElementById('modal').style.display = 'none';
+      fecharModal();
     };
     document.getElementById('cidades-list').appendChild(div);
   });
